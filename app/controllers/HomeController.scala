@@ -27,23 +27,23 @@ class HomeController @Inject()(readConfig: ReadConfig, cc: MessagesControllerCom
     } else {
       logger.info(s"Empty asFormUrlEncoded")
     }*/
-    var apiKey: String = null
+    /**var apiKey: String = null
     if(request.headers.get("x-api-key")!= None) {
       apiKey = request.headers.get("x-api-key").get
       logger.info(s"API_KEY = ${apiKey}")
-    }
+    }*/
     request.body.validate[RegistrationInfo] match {
       case JsSuccess(registrationInfo, _) => {
-        if(apiKey == readConfig.API_KEY) {
+        if(registrationInfo.apiKey == readConfig.API_KEY) {
           logger.info(s"${registrationInfo}")
           Ok
         } else {
-          Forbidden
+          Forbidden(s"${registrationInfo.apiKey}")
         }
       }
       case JsError(errors) =>
         logger.info(s"$errors")
-        BadRequest
+        BadRequest(s"$errors")
     }
   }
 
@@ -54,25 +54,23 @@ class HomeController @Inject()(readConfig: ReadConfig, cc: MessagesControllerCom
     } else {
       logger.info(s"Empty asFormUrlEncoded")
     }*/
-    var apiKey: String = null
+    /**var apiKey: String = null
     if(request.headers.get("x-api-key")!= None) {
       apiKey = request.headers.get("x-api-key").get
       logger.info(s"API_KEY = ${apiKey}")
-    }
+    }*/
     request.body.validate[LastFiveMinData] match {
       case JsSuccess(lastFiveMinData, _) => {
-        if(apiKey == readConfig.API_KEY) {
+        if(lastFiveMinData.apiKey == readConfig.API_KEY) {
           logger.info(s"${lastFiveMinData}")
           Ok
         } else {
-          Forbidden
+          Forbidden(s"${lastFiveMinData.apiKey}")
         }
       }
       case JsError(errors) =>
         logger.info(s"$errors")
-        BadRequest
+        BadRequest(s"$errors")
     }
-
   }
-
 }
