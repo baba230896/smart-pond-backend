@@ -2,7 +2,7 @@ package common
 
 import play.api.libs.json.Json
 
-case class LastFiveMinData(deviceId: Int, pH: Float, dO: Float, temp: Float)
+case class LastFiveMinData(apiKey:String, deviceId: Int, pH: Float, dO: Float, temp: Float)
 
 object LastFiveMinData {
   implicit val writesLastFiveMinData = Json.writes[LastFiveMinData]
