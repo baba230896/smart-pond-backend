@@ -4,15 +4,17 @@ import javax.inject.{Inject, Singleton}
 import play.api.{Configuration, Logger}
 import java.lang.reflect.Field
 
+import com.typesafe.config.Config
+
 @Singleton
 class ReadConfig @Inject() (restConfig: Configuration) {
 
   val requiredVars = List("API_KEY")
-  val smartPondConfig = restConfig.underlying.getConfig("SmartPond.restConfig")
+  val smartPondConfig: Config = restConfig.underlying.getConfig("SmartPond.restConfig")
   val logger: Logger = Logger(this.getClass)
-  var API_KEY: String = null
+  var API_KEY: String = _
 
-  def checkRequired(reqVarsList:List[String]) = {
+  def checkRequired(reqVarsList:List[String]): Unit = {
     logger.info(s"Parsing of required config parameters")
     //Errors out if value doesn't exist
     for(param <- reqVarsList) {
@@ -20,10 +22,10 @@ class ReadConfig @Inject() (restConfig: Configuration) {
         val arg : Field = this.getClass.getDeclaredField(param)
         arg.setAccessible(true)
         arg.set(this,smartPondConfig.getString(param))
-        logger.info(s"Found ${param} in config set to ${smartPondConfig.getString(param)}.")
+        logger.info(s"Found $param in config set to ${smartPondConfig.getString(param)}.")
       }
       else {
-        logger.error(s"${param} is required in SmartPond Rest Config")
+        logger.error(s"$param is required in SmartPond Rest Config")
         System.exit(1)
       }
     }

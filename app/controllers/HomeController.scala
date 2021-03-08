@@ -1,78 +1,137 @@
 package controllers
 
 import javax.inject._
-import play.api._
 import play.api.mvc._
 import play.api.Logger
+import play.api.inject.Injector
 
-import scala.concurrent.{ExecutionContext, Future}
-import play.api.libs.json.{JsError, JsSuccess, Json, __}
-import java.sql.Timestamp
-
+import scala.concurrent.{ExecutionContext, Promise}
 import common._
+import play.api.libs.json.{JsValue, Json}
+
+import scala.collection.mutable
+import scala.util.{Failure, Success}
 
 @Singleton
-class HomeController @Inject()(readConfig: ReadConfig, cc: MessagesControllerComponents)(implicit ec:ExecutionContext)
+class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: MessagesControllerComponents)(implicit ec:ExecutionContext)
         extends MessagesAbstractController(cc) {
-  val logger:Logger = Logger(this.getClass())
+  val logger:Logger = Logger(this.getClass)
 
-  def index() = Action { implicit request: Request[AnyContent] =>
+  def index:Action[AnyContent] = Action { implicit request: Request[AnyContent] =>
     Ok("SmartPond project started")
   }
 
-  def register() = Action(parse.json) { implicit request =>
+  def register: Action[AnyContent] = Action.async { implicit request =>
+    val rtrn : Promise[Result] = Promise()
     logger.info(s"In register Endpoint")
-    /**if (request.body.asFormUrlEncoded != None) {
-      logger.info(s"${request.body.asFormUrlEncoded.get}")
-    } else {
-      logger.info(s"Empty asFormUrlEncoded")
-    }*/
-    var apiKey: String = null
-    if(request.headers.get("x-api-key")!= None) {
-      apiKey = request.headers.get("x-api-key").get
-      logger.info(s"API_KEY = ${apiKey}")
-    }
-    request.body.validate[RegistrationInfo] match {
-      case JsSuccess(registrationInfo, _) => {
-        if(apiKey == readConfig.API_KEY) {
-          logger.info(s"${registrationInfo}")
-          Ok
-        } else {
-          Forbidden
-        }
+    if(!request.rawQueryString.isEmpty) {
+      val str = request.rawQueryString.split("&").toList
+      logger.info(s"$str")
+      val maps = mutable.Map[String, String]()
+      for(s <- str) {
+        val temp = s.split("=")
+        maps += (temp(0) -> temp(1))
       }
-      case JsError(errors) =>
-        logger.info(s"$errors")
-        BadRequest
+      logger.info(s"$maps")
+      if(maps.contains("apiKey")) {
+        if(maps.get("apiKey").head == readConfig.API_KEY) {
+          val regInfoRepo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
+          regInfoRepo.create(maps.get("deviceId").head.toInt, maps.get("mobileNo").head, maps.get("loThrsPh").head.toFloat, maps.get("upThrsPh").head.toFloat,
+            maps.get("loThrsDo").head.toFloat, maps.get("upThrsDo").head.toFloat, maps.get("loThrsTemp").head.toFloat,
+            maps.get("upThrsTemp").head.toFloat, maps.get("mobileNo").head).onComplete({
+            case Success(value) => rtrn.success(Status(200)(s"OK"))
+            case Failure(exception) => rtrn.failure(exception)
+          })
+        } else {
+          rtrn.success(Status(401)(s"Pass correct apiKey"))
+        }
+      } else {
+        rtrn.success(Status(403)(s"Pass apiKey parameter"))
+      }
+    } else {
+      rtrn.success(Status(400)(s"Give appropriate parameters"))
     }
+    rtrn.future
   }
 
-  def lastFiveMinData() = Action(parse.json) { implicit request =>
+  def lastFiveMinData:Action[AnyContent] = Action.async { implicit request =>
+    val rtrn: Promise[Result] = Promise()
     logger.info(s"In lastFiveMinData Endpoint")
-    /**if (request.body.asFormUrlEncoded != None) {
-      logger.info(s"${request.body.asFormUrlEncoded.get}")
-    } else {
-      logger.info(s"Empty asFormUrlEncoded")
-    }*/
-    var apiKey: String = null
-    if(request.headers.get("x-api-key")!= None) {
-      apiKey = request.headers.get("x-api-key").get
-      logger.info(s"API_KEY = ${apiKey}")
-    }
-    request.body.validate[LastFiveMinData] match {
-      case JsSuccess(lastFiveMinData, _) => {
-        if(apiKey == readConfig.API_KEY) {
-          logger.info(s"${lastFiveMinData}")
-          Ok
-        } else {
-          Forbidden
-        }
+    if(!request.rawQueryString.isEmpty) {
+      val str = request.rawQueryString.split("&").toList
+      logger.info(s"$str")
+      val maps = mutable.Map[String, String]()
+      for(s <- str) {
+        val temp = s.split("=")
+        maps += (temp(0) -> temp(1))
       }
-      case JsError(errors) =>
-        logger.info(s"$errors")
-        BadRequest
+      logger.info(s"$maps")
+      if(maps.contains("apiKey")) {
+        if(maps.get("apiKey").head == readConfig.API_KEY) {
+          val lastFiveMinRepo: LastFiveMinDataRepo = injector.instanceOf(classOf[LastFiveMinDataRepo])
+          lastFiveMinRepo.create(maps.get("deviceId").head.toInt,
+            maps.get("pH").head.toFloat, maps.get("dO").head.toFloat, maps.get("temp").head.toFloat).onComplete({
+            case Success(value) => rtrn.success(Status(200)(s"OK"))
+            case Failure(exception) => rtrn.failure(exception)
+          })
+        } else {
+          rtrn.success(Status(401)(s"Pass correct apiKey"))
+        }
+      } else {
+        rtrn.success(Status(403)(s"Pass apiKey parameter"))
+      }
+    } else {
+      rtrn.success(Status(400)(s"Give appropriate parameters"))
     }
-
+    rtrn.future
   }
 
+  def displayDeviceRegData: Action[AnyContent] = Action.async { implicit request =>
+    val rtrn: Promise[Result] = Promise()
+    logger.info(s"In the /displayRegData")
+    if(!request.rawQueryString.isEmpty) {
+      val str = request.rawQueryString.split("&").toList
+      logger.info(s"$str")
+      val maps = mutable.Map[String, String]()
+      for(s <- str) {
+        val temp = s.split("=")
+        maps += (temp(0) -> temp(1))
+      }
+      logger.info(s"$maps")
+      if(maps.contains("apiKey")) {
+        if(maps.get("apiKey").head == readConfig.API_KEY) {
+          val regInfo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
+          regInfo.deviceRegInfo(maps.get("deviceId").head.toInt).onComplete({
+            case Success(value) =>
+              if(value.length != 0) {
+                logger.info(s"$value")
+                val op = Json.toJson(value.head)
+                rtrn.success(Status(200)(op))
+              } else {
+                rtrn.success(Status(400)(s"DeviceId doesn't exists!!!"))
+              }
+
+            case Failure(exception) =>
+              rtrn.success(Status(400)(s"$exception"))
+          })
+        } else {
+          rtrn.success(Status(401)(s"Pass correct apiKey"))
+        }
+      } else {
+        rtrn.success(Status(403)(s"Pass apiKey parameter"))
+      }
+    } else {
+      rtrn.success(Status(400)(s"Give appropriate parameters"))
+    }
+    rtrn.future
+  }
+  def deviceList: Action[JsValue] = Action(parse.json) { implicit request =>
+    Ok("TODO")
+  }
+  def last24HrDataPerUser: Action[JsValue] = Action(parse.json) { implicit request =>
+    Ok("TODO")
+  }
+  def login: Action[JsValue] = Action(parse.json) { implicit request =>
+    Ok("TODO")
+  }
 }
