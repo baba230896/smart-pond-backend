@@ -6,11 +6,14 @@ import play.api.Logger
 import play.api.inject.Injector
 
 import scala.concurrent.{ExecutionContext, Promise}
-import common._
+
 import play.api.libs.json.{JsValue, Json}
 
-import scala.collection.mutable
 import scala.util.{Failure, Success}
+
+import common._
+import common.CaseClasses._
+import common.CommonFunctions._
 
 @Singleton
 class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: MessagesControllerComponents)(implicit ec:ExecutionContext)
@@ -21,35 +24,44 @@ class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: M
     Ok("SmartPond project started")
   }
 
-  def register: Action[AnyContent] = Action.async { implicit request =>
-    val rtrn : Promise[Result] = Promise()
+  def register:Action[AnyContent] = Action.async { implicit request =>
+    val rtrn: Promise[Result] = Promise();
     logger.info(s"In register Endpoint")
-    if(!request.rawQueryString.isEmpty) {
-      val str = request.rawQueryString.split("&").toList
-      logger.info(s"$str")
-      val maps = mutable.Map[String, String]()
-      for(s <- str) {
-        val temp = s.split("=")
-        maps += (temp(0) -> temp(1))
-      }
-      logger.info(s"$maps")
-      if(maps.contains("apiKey")) {
-        if(maps.get("apiKey").head == readConfig.API_KEY) {
-          val regInfoRepo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
-          regInfoRepo.create(maps.get("deviceId").head.toInt, maps.get("mobileNo").head, maps.get("loThrsPh").head.toFloat, maps.get("upThrsPh").head.toFloat,
-            maps.get("loThrsDo").head.toFloat, maps.get("upThrsDo").head.toFloat, maps.get("loThrsTemp").head.toFloat,
-            maps.get("upThrsTemp").head.toFloat, maps.get("mobileNo").head).onComplete({
-            case Success(value) => rtrn.success(Status(200)(s"OK"))
-            case Failure(exception) => rtrn.failure(exception)
-          })
-        } else {
-          rtrn.success(Status(401)(s"Pass correct apiKey"))
-        }
-      } else {
-        rtrn.success(Status(403)(s"Pass apiKey parameter"))
-      }
+    if(request.rawQueryString.isEmpty) {
+      rtrn.success(BadRequest(s"Parameters missing!!!"))
     } else {
-      rtrn.success(Status(400)(s"Give appropriate parameters"))
+      val maps = convertRawStringToMap(request.rawQueryString)
+      val missParam = checkParameters(maps, listOfParamForRegister)
+      if(missParam.length != 0 ) {
+        rtrn.success(Unauthorized(s"Parameter(s) missing = $missParam"))
+      } else {
+        if(!(maps.get("apiKey").head == readConfig.API_KEY)) {
+          rtrn.success(Forbidden("Wrong ApiKey!!!"))
+        } else {
+          val regInfoRepo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
+          regInfoRepo.deviceRegInfo(maps.get("deviceId").head.toInt).onComplete({
+            case Success(value) =>
+              if(value.length == 0) {
+                regInfoRepo.create(maps).onComplete({
+                  case Success(value) =>
+                    val customerInfoRepo = injector.instanceOf(classOf[CustomerInfoRepo])
+                    customerInfoRepo.create(maps.get("deviceId").head.toInt).onComplete({
+                      case Success(value) => rtrn.success(Ok(s"OK!!!"))
+                      case Failure(exception) => rtrn.failure(exception)
+                    })
+                  case Failure(exception) => rtrn.failure(exception)
+                })
+              } else {
+                regInfoRepo.update(maps).onComplete({
+                  case Success(value) => rtrn.success(Ok(s"OK!!!"))
+                  case Failure(exception) => rtrn.failure(exception)
+                })
+              }
+            case Failure(exception) =>
+              rtrn.failure(exception)
+          })
+        }
+      }
     }
     rtrn.future
   }
@@ -57,31 +69,34 @@ class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: M
   def lastFiveMinData:Action[AnyContent] = Action.async { implicit request =>
     val rtrn: Promise[Result] = Promise()
     logger.info(s"In lastFiveMinData Endpoint")
-    if(!request.rawQueryString.isEmpty) {
-      val str = request.rawQueryString.split("&").toList
-      logger.info(s"$str")
-      val maps = mutable.Map[String, String]()
-      for(s <- str) {
-        val temp = s.split("=")
-        maps += (temp(0) -> temp(1))
-      }
-      logger.info(s"$maps")
-      if(maps.contains("apiKey")) {
-        if(maps.get("apiKey").head == readConfig.API_KEY) {
-          val lastFiveMinRepo: LastFiveMinDataRepo = injector.instanceOf(classOf[LastFiveMinDataRepo])
-          lastFiveMinRepo.create(maps.get("deviceId").head.toInt,
-            maps.get("pH").head.toFloat, maps.get("dO").head.toFloat, maps.get("temp").head.toFloat).onComplete({
-            case Success(value) => rtrn.success(Status(200)(s"OK"))
-            case Failure(exception) => rtrn.failure(exception)
-          })
-        } else {
-          rtrn.success(Status(401)(s"Pass correct apiKey"))
-        }
-      } else {
-        rtrn.success(Status(403)(s"Pass apiKey parameter"))
-      }
+    if(request.rawQueryString.isEmpty) {
+      rtrn.success(BadRequest(s"Parameters missing!!!"))
     } else {
-      rtrn.success(Status(400)(s"Give appropriate parameters"))
+      val maps = CommonFunctions.convertRawStringToMap(request.rawQueryString)
+      val missParam = checkParameters(maps, listOfParamForLastFiveMinData)
+      if(missParam.length != 0 ) {
+        rtrn.success(Unauthorized(s"Parameter(s) missing = $missParam"))
+      } else {
+        if(!(maps.get("apiKey").head == readConfig.API_KEY)) {
+          rtrn.success(Forbidden("Wrong ApiKey!!!"))
+        } else {
+          val regInfoRepo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
+          regInfoRepo.deviceRegInfo(maps.get("deviceId").head.toInt).onComplete({
+            case Success(value) =>
+              if(value.length != 0) {
+                val lastFiveMinRepo: LastFiveMinDataRepo = injector.instanceOf(classOf[LastFiveMinDataRepo])
+                lastFiveMinRepo.create(maps).onComplete({
+                  case Success(value) => rtrn.success(Ok(s"OK!!!"))
+                  case Failure(exception) => rtrn.failure(exception)
+                })
+              } else {
+                rtrn.success(NotFound(s"DeviceId doesn't Exists!!!"))
+              }
+            case Failure(exception) =>
+              rtrn.failure(exception)
+          })
+        }
+      }
     }
     rtrn.future
   }
@@ -89,48 +104,50 @@ class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: M
   def displayDeviceRegData: Action[AnyContent] = Action.async { implicit request =>
     val rtrn: Promise[Result] = Promise()
     logger.info(s"In the /displayRegData")
-    if(!request.rawQueryString.isEmpty) {
-      val str = request.rawQueryString.split("&").toList
-      logger.info(s"$str")
-      val maps = mutable.Map[String, String]()
-      for(s <- str) {
-        val temp = s.split("=")
-        maps += (temp(0) -> temp(1))
-      }
-      logger.info(s"$maps")
-      if(maps.contains("apiKey")) {
-        if(maps.get("apiKey").head == readConfig.API_KEY) {
-          val regInfo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
-          regInfo.deviceRegInfo(maps.get("deviceId").head.toInt).onComplete({
+    if(request.rawQueryString.isEmpty) {
+      rtrn.success(BadRequest(s"Parameters Missing!!!"))
+    } else {
+      val maps = CommonFunctions.convertRawStringToMap(request.rawQueryString)
+      val missParam = checkParameters(maps, listOfParamForDeviceData)
+      if(missParam.length != 0 ) {
+        rtrn.success(Unauthorized(s"Parameter(s) missing = $missParam"))
+      } else {
+        if(!(maps.get("apiKey").head == readConfig.API_KEY)) {
+          rtrn.success(Forbidden("Wrong ApiKey!!!"))
+        } else {
+          val regInfoRepo: RegInfoRepo = injector.instanceOf(classOf[RegInfoRepo])
+          regInfoRepo.deviceRegInfo(maps.get("deviceId").head.toInt).onComplete({
             case Success(value) =>
               if(value.length != 0) {
-                logger.info(s"$value")
-                val op = Json.toJson(value.head)
-                rtrn.success(Status(200)(op))
+                rtrn.success(Ok(Json.toJson(value.head)))
               } else {
-                rtrn.success(Status(400)(s"DeviceId doesn't exists!!!"))
+                rtrn.success(NotFound(s"DeviceId doesn't Exists!!!"))
               }
-
             case Failure(exception) =>
-              rtrn.success(Status(400)(s"$exception"))
+              rtrn.failure(exception)
           })
-        } else {
-          rtrn.success(Status(401)(s"Pass correct apiKey"))
         }
-      } else {
-        rtrn.success(Status(403)(s"Pass apiKey parameter"))
       }
-    } else {
-      rtrn.success(Status(400)(s"Give appropriate parameters"))
     }
     rtrn.future
   }
-  def deviceList: Action[JsValue] = Action(parse.json) { implicit request =>
-    Ok("TODO")
+
+  def deviceList:Action[AnyContent] = Action.async { implicit request =>
+   logger.info(s"Into the /deviceList Endpoint")
+    val rtrn : Promise[Result] = Promise()
+    var apiKey: String = null
+    if(request.headers.get("x-api-key").isDefined) {
+      logger.info(s"API_KEY = ${request.headers.get("x-api-key").head}")
+    } else {
+
+    }
+    rtrn.future
   }
+
   def last24HrDataPerUser: Action[JsValue] = Action(parse.json) { implicit request =>
     Ok("TODO")
   }
+
   def login: Action[JsValue] = Action(parse.json) { implicit request =>
     Ok("TODO")
   }

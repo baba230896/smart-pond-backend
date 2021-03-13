@@ -1,7 +1,8 @@
 package common
 import javax.inject.{Inject, Singleton}
-import java.util.UUID
+import java.sql.Timestamp
 
+import scala.collection.mutable
 import play.api.Logger
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
@@ -37,8 +38,10 @@ class LastFiveMinDataRepo @Inject()(protected val dbConfigProvider: DatabaseConf
   }
   private val lastFiveMin = TableQuery[LastFiveMin]
 
-  def create(deviceId: Int, pH: Float, dO: Float, temp: Float): Future[Int]  = db.run {
-    lastFiveMin.map(l => (l.deviceId, l.pH, l.dO, l.temp )) += (deviceId, pH, dO, temp)
+
+  def create(maps: mutable.Map[String, String]): Future[Int]  = db.run {
+    lastFiveMin.map(l => (l.deviceId, l.pH, l.dO, l.temp)) += (maps.get("deviceId").head.toInt,
+      maps.get("pH").head.toFloat, maps.get("dO").head.toFloat, maps.get("temp").head.toFloat)
   }
 
 }
