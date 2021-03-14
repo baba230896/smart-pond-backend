@@ -27,15 +27,19 @@ class CustomerInfoRepo @Inject()(protected val dbConfigProvider: DatabaseConfigP
 
   private class CustInfo(tag: Tag) extends Table[CustomerInfo](tag, "customerinfo"){
 
-    def deviceId = column[Int]("deviceid")
+    def userId = column[String]("userid")
     def password = column[String]("password")
 
-    def * = (deviceId, password) <> ((CustomerInfo.apply _).tupled, CustomerInfo.unapply)
+    def * = (userId, password) <> ((CustomerInfo.apply _).tupled, CustomerInfo.unapply)
   }
 
   private val customerInfo = TableQuery[CustInfo]
 
-  def create(deviceId: Int): Future[Int] = db.run {
-    customerInfo.map(c => (c.deviceId, c.password)) += (deviceId, deviceId.toString)
+  def create(userId: String): Future[Int] = db.run {
+    customerInfo.map(c => (c.userId, c.password)) += (userId, userId)
+  }
+
+  def checkUserExists(userId: String): Future[Seq[CustomerInfo]] = db.run {
+    customerInfo.filter(_.userId === userId).result
   }
 }
