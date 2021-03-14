@@ -43,12 +43,7 @@ class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: M
             case Success(value) =>
               if(value.length == 0) {
                 regInfoRepo.create(maps).onComplete({
-                  case Success(value) =>
-                    val customerInfoRepo = injector.instanceOf(classOf[CustomerInfoRepo])
-                    customerInfoRepo.create(maps.get("deviceId").head.toInt).onComplete({
-                      case Success(value) => rtrn.success(Ok(s"OK!!!"))
-                      case Failure(exception) => rtrn.failure(exception)
-                    })
+                  case Success(value) => rtrn.success(Ok(s"OK!!!"))
                   case Failure(exception) => rtrn.failure(exception)
                 })
               } else {
@@ -57,6 +52,16 @@ class HomeController @Inject()(injector: Injector, readConfig: ReadConfig, cc: M
                   case Failure(exception) => rtrn.failure(exception)
                 })
               }
+              val customerInfoRepo = injector.instanceOf(classOf[CustomerInfoRepo])
+              customerInfoRepo.checkUserExists(maps.get("mobileNo").head).onComplete({
+                case Success(value) =>
+                  if(value.length == 0)
+                    customerInfoRepo.create(maps.get("mobileNo").head).onComplete({
+                      case Success(value) => logger.info(s"$value")
+                      case Failure(exception) => logger.info(s"$exception")
+                    })
+                case Failure(exception) => logger.info(s"$exception")
+              })
             case Failure(exception) =>
               rtrn.failure(exception)
           })
